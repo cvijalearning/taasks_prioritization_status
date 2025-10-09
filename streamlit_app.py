@@ -97,7 +97,13 @@ def ensure_schema_migration(engine):
 
 def get_engine_and_table():
     db_url = get_db_url()
-    engine = create_engine(db_url, pool_pre_ping=True, future=True)
+    engine = create_engine(
+    db_url,
+    pool_pre_ping=True,
+    pool_size=3,        # keep it low for free tiers
+    max_overflow=0,     # do not exceed the pool
+    future=True
+    )
     metadata = MetaData()
 
     tasks = Table(
