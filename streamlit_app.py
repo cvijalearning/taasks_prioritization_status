@@ -110,7 +110,7 @@ def get_engine_and_table():
         "tasks",
         metadata,
         Column("id", String(36), primary_key=True),
-        Column("title", String(255), nullable=False),
+        Column("title", Text, nullable=False),
         Column("description", Text, nullable=True),
         Column("group_name", String(32), nullable=False),
         Column("status", String(32), nullable=False),
