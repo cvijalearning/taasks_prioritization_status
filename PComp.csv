@@ -1,8 +1,0 @@
-﻿Task,Group_Name,Status,Depends_on,Priority,Note
-" Sredi so firmata za Jase (otvaranje hello bank acount, Acerta documentation, planned payments, benefits za jase dali mojt da pobarat maternity leave and how much will she be paid, finish the remining legal activities)",Pcomp,New,,,
-" AP licna firma - update/complete online freelance accounts with the specific capability offering (activate and verify all freelance accounts, Turing, etc see Trello list)",Pcomp,New,,,
- AP licna firma - Work on the projects for the company (see the list in trello),Pcomp,New,,,
- Have a call with SDZ and NSZ to ask what they offer - important is to check their English level support and availability (worried about accounting) - You need to either pay for SDZ or explicitly reject it via email before the end of September,Pcomp,New,,,
-" AP licna firma Cvetan i Mohamed - portfolio od proekti, kreiraj stranica za klienti da mozat da ne kontaktiraat",Pcomp,New,,,
-" AP licna firma - Implement audio transcribing AI Agent, DATA ENGINEERING FLOWS WITH AIRFLOW, RAG (finish it) and MCP experiment, Github copilot, AI deterministic tool to check if the agents are responding correctly, Mistral to deploy on Llama, Vertex AI",Pcomp,New,,,
- PC Idea: auromated website field filling hosted on vercel,Pcomp,New,,,

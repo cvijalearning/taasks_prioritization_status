@@ -15,7 +15,7 @@ import altair as alt
 
 APP_TITLE = "Activities Dashboard"
 
-ALLOWED_GROUPS = ["PComp", "Home", "BH&CAP"]
+ALLOWED_GROUPS = ["PComp", "Home", "BH&CAP", "Fatherhood"]
 ALLOWED_STATUSES = [
     "New",
     "Depends on (Optional)",
