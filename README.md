@@ -1,6 +1,6 @@
 # Activities Dashboard – v3.1 (No secrets, local SQLite only)
 
-This build removes Streamlit secrets entirely and **always uses local SQLite** (a file-based SQL database) stored at `./data/tasks.db`. No Postgres, no cloud DB needed.
+This build removes Streamlit secrets entirely and **always uses local SQLite** (a file-based SQL database) stored at `./data/prioritized_tasks.db`. No Postgres, no cloud DB needed.
 
 **Auth** is **off by default**. If you want a simple one-password gate later, set environment variables (see below).
 
