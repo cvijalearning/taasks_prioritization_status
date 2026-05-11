@@ -321,26 +321,68 @@ def page_dashboard_prioritized(engine, prioritized_tasks_tbl, archived_tasks_tbl
 
     # --- Dependency Graph ---
     st.subheader("🔗 Task Dependency Graph")
-    deps = df[df['depends_on'].notna() & (df['depends_on'] != "")]
-    if not deps.empty:
-        dot = "digraph {\n"
-        dot += "  rankdir=LR;\n"
-        dot += "  node [shape=box, style=filled, color=lightblue];\n"
+    
+    # Filter for the graph
+    show_all = st.checkbox("Show isolated tasks (no dependencies)", value=False)
+    
+    # Identify tasks with dependencies
+    deps_mask = df['depends_on'].notna() & (df['depends_on'] != "")
+    tasks_with_deps = set()
+    for _, row in df[deps_mask].iterrows():
+        tasks_with_deps.add(row['id'])
+        parent_ids = [pid.strip() for pid in str(row['depends_on']).split(',')]
+        for pid in parent_ids:
+            tasks_with_deps.add(pid)
+    
+    # Filter DF for the graph
+    graph_df = df if show_all else df[df['id'].isin(tasks_with_deps)]
+
+    if not graph_df.empty:
+        # Define status colors
+        status_colors = {
+            "Done": {"bg": "#d4edda", "border": "#28a745", "text": "#155724"},
+            "In Progress": {"bg": "#fff3cd", "border": "#ffc107", "text": "#856404"},
+            "To Do": {"bg": "#f8f9fa", "border": "#6c757d", "text": "#383d41"},
+            "Blocked": {"bg": "#f8d7da", "border": "#dc3545", "text": "#721c24"},
+            "Abandoned": {"bg": "#e2e3e5", "border": "#343a40", "text": "#383d41"}
+        }
+
+        dot = """
+        digraph {
+            rankdir=LR;
+            node [fontname="Segoe UI, Roboto, Helvetica, Arial, sans-serif", fontsize=11, style="filled,rounded", shape=box, margin="0.2,0.1"];
+            edge [color="#cccccc", arrowhead=vee, arrowsize=0.7];
+        """
+        
         # Nodes
-        for _, row in df.iterrows():
-            label = f"{row['title'][:30]}...\\n({row['status']})" if len(row['title']) > 30 else f"{row['title']}\\n({row['status']})"
-            dot += f'  "{row["id"]}" [label="{label}"];\n'
-        # Edges
-        for _, row in deps.iterrows():
-            parent_ids = [pid.strip() for pid in str(row['depends_on']).split(',')]
-            for pid in parent_ids:
-                # Only add edge if parent exists in df to avoid broken graph
-                if pid in df['id'].values:
-                    dot += f'  "{pid}" -> "{row["id"]}";\n'
+        for _, row in graph_df.iterrows():
+            status = row['status']
+            colors = status_colors.get(status, status_colors["To Do"])
+            
+            # Clean title for label
+            clean_title = row['title'].replace('"', "'")
+            if len(clean_title) > 35:
+                clean_title = clean_title[:32] + "..."
+                
+            label = f'<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0">'
+            label += f'<TR><TD><B>{clean_title}</B></TD></TR>'
+            label += f'<TR><TD><FONT POINT-SIZE="9">{status}</FONT></TD></TR>'
+            label += f'</TABLE>>'
+            
+            dot += f'  "{row["id"]}" [label={label}, fillcolor="{colors["bg"]}", color="{colors["border"]}", fontcolor="{colors["text"]}"];\n'
+        
+        # Edges (only for the tasks present in the graph)
+        for _, row in df[deps_mask].iterrows():
+            if row['id'] in graph_df['id'].values:
+                parent_ids = [pid.strip() for pid in str(row['depends_on']).split(',')]
+                for pid in parent_ids:
+                    if pid in graph_df['id'].values:
+                        dot += f'  "{pid}" -> "{row["id"]}";\n'
+        
         dot += "}"
         st.graphviz_chart(dot)
     else:
-        st.info("No dependencies defined yet.")
+        st.info("No dependencies defined yet. Add 'Depends On' links in the Manage Tasks tab.")
 
 
 def page_import_prioritized(engine, prioritized_tasks_tbl):
