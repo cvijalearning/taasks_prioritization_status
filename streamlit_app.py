@@ -12,7 +12,7 @@ from sqlalchemy import (
 import altair as alt
 
 # Daily Prioritization Constants
-PRIORITIZED_GROUPS = ["Home", "Work", "Personal", "Wife", "Son", "Parents", "Auto", "PComp"]
+PRIORITIZED_GROUPS = ["Home", "Work", "Work Client", "Personal", "Wife", "Son", "Parents", "Auto", "PComp"]
 PRIORITIZED_STATUSES = ["To Do", "In Progress", "Done", "Blocked", "Abandoned"]
 
 ATTACHMENT_DIR = "data/attachments"
@@ -347,7 +347,7 @@ def page_import_prioritized(engine, prioritized_tasks_tbl):
     st.header("📥 Import Tasks")
     st.markdown("""
     Upload a CSV file with columns: `Title`, `Group`, `Time`, `Value`, `Grade`, `Status`, `Notes`.
-    - **Group**: Home, Work, Personal, Wife, Son, Parents, Auto, PComp
+    - **Group**: Home, Work, Work Client, Personal, Wife, Son, Parents, Auto, PComp
     - **Status**: To Do, In Progress, Done, Blocked, Abandoned
     - **Grade**: A, B, C, D (or full text)
     """)
