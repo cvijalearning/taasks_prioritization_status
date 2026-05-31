@@ -113,6 +113,7 @@ def ensure_schema_migration(engine):
         pass
 
 
+@st.cache_resource
 def get_engine_and_table():
     db_url = get_db_url()
     engine = create_engine(
