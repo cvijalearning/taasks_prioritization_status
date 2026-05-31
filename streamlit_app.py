@@ -239,6 +239,15 @@ def parse_csv_prioritized(uploaded_file):
 
     return df
 
+def get_tasks_df(engine, prioritized_tasks_tbl, force_refresh=False):
+    if "tasks_df" not in st.session_state or force_refresh:
+        with engine.begin() as conn:
+            st.session_state["tasks_df"] = pd.read_sql(
+                select(prioritized_tasks_tbl).order_by(prioritized_tasks_tbl.c.created_at.desc()), 
+                conn
+            )
+    return st.session_state["tasks_df"]
+
 # -----------------------------
 # Pages
 # -----------------------------
@@ -246,8 +255,7 @@ APP_TITLE = "Prioritized Task Manager"
 
 def page_timeline_prioritized(engine, prioritized_tasks_tbl):
     st.header("📅 Project Timeline")
-    with engine.begin() as conn:
-        df = pd.read_sql(select(prioritized_tasks_tbl), conn)
+    df = get_tasks_df(engine, prioritized_tasks_tbl)
     
     if df.empty or df['due_date'].isna().all():
         st.info("No tasks with due dates found. Add deadlines to see the timeline.")
@@ -270,8 +278,7 @@ def page_timeline_prioritized(engine, prioritized_tasks_tbl):
 def page_dashboard_prioritized(engine, prioritized_tasks_tbl, archived_tasks_tbl):
     st.header("📊 Statistics")
     
-    with engine.begin() as conn:
-        df = pd.read_sql(select(prioritized_tasks_tbl), conn)
+    df = get_tasks_df(engine, prioritized_tasks_tbl)
         
     if df.empty:
         st.info("No data available.")
@@ -414,6 +421,7 @@ def page_import_prioritized(engine, prioritized_tasks_tbl):
                     # simplistic upsert or insert
                     try:
                         conn.execute(insert(prioritized_tasks_tbl), recs)
+                        get_tasks_df(engine, prioritized_tasks_tbl, force_refresh=True)
                         st.success(f"Successfully imported {len(recs)} tasks!")
                         st.balloons()
                     except Exception as e:
@@ -425,8 +433,7 @@ def page_import_prioritized(engine, prioritized_tasks_tbl):
 @st.fragment
 def render_agile_management(engine, prioritized_tasks_tbl, all_task_options):
     # Load data for filtering
-    with engine.begin() as conn:
-        df = pd.read_sql(select(prioritized_tasks_tbl).order_by(prioritized_tasks_tbl.c.created_at.desc()), conn)
+    df = get_tasks_df(engine, prioritized_tasks_tbl)
 
     if df.empty:
         st.info("No prioritized tasks yet.")
@@ -478,27 +485,45 @@ def render_agile_management(engine, prioritized_tasks_tbl, all_task_options):
                         if st.button("⏹️ Stop Timer", key=f"stop_{row['id']}", type="primary"):
                             diff = datetime.utcnow() - row['timer_start_at']
                             mins = int(diff.total_seconds() / 60)
+                            new_mins = spent + mins
+                            
+                            # In-place cache update
+                            df_idx = st.session_state["tasks_df"][st.session_state["tasks_df"]['id'] == row['id']].index
+                            if len(df_idx) > 0:
+                                st.session_state["tasks_df"].at[df_idx[0], 'is_running'] = False
+                                st.session_state["tasks_df"].at[df_idx[0], 'actual_minutes'] = new_mins
+                                st.session_state["tasks_df"].at[df_idx[0], 'updated_at'] = datetime.utcnow()
+                            
                             with engine.begin() as conn:
                                 conn.execute(
                                     update(prioritized_tasks_tbl)
                                     .where(prioritized_tasks_tbl.c.id == row['id'])
                                     .values(
                                         is_running=False,
-                                        actual_minutes=spent + mins,
+                                        actual_minutes=new_mins,
                                         updated_at=datetime.utcnow()
                                     )
                                 )
                             st.rerun()
                     else:
                         if st.button("▶️ Start Timer", key=f"start_{row['id']}"):
+                            now = datetime.utcnow()
+                            
+                            # In-place cache update
+                            df_idx = st.session_state["tasks_df"][st.session_state["tasks_df"]['id'] == row['id']].index
+                            if len(df_idx) > 0:
+                                st.session_state["tasks_df"].at[df_idx[0], 'is_running'] = True
+                                st.session_state["tasks_df"].at[df_idx[0], 'timer_start_at'] = now
+                                st.session_state["tasks_df"].at[df_idx[0], 'updated_at'] = now
+                                
                             with engine.begin() as conn:
                                 conn.execute(
                                     update(prioritized_tasks_tbl)
                                     .where(prioritized_tasks_tbl.c.id == row['id'])
                                     .values(
                                         is_running=True,
-                                        timer_start_at=datetime.utcnow(),
-                                        updated_at=datetime.utcnow()
+                                        timer_start_at=now,
+                                        updated_at=now
                                     )
                                 )
                             st.rerun()
@@ -523,6 +548,12 @@ def render_agile_management(engine, prioritized_tasks_tbl, all_task_options):
                     )
                     
                     if new_status != status:
+                        # In-place cache update
+                        df_idx = st.session_state["tasks_df"][st.session_state["tasks_df"]['id'] == row['id']].index
+                        if len(df_idx) > 0:
+                            st.session_state["tasks_df"].at[df_idx[0], 'status'] = new_status
+                            st.session_state["tasks_df"].at[df_idx[0], 'updated_at'] = datetime.utcnow()
+                            
                         with engine.begin() as conn:
                             conn.execute(
                                 update(prioritized_tasks_tbl)
@@ -593,7 +624,8 @@ def render_agile_management(engine, prioritized_tasks_tbl, all_task_options):
                                             with open(os.path.join(tdir, new_attachment.name), "wb") as f:
                                                 f.write(new_attachment.getbuffer())
                                             st.success(f"Attached {new_attachment.name}")
-                                            
+                                    # Force DB reload for structural card changes
+                                    get_tasks_df(engine, prioritized_tasks_tbl, force_refresh=True)
                                     st.session_state[v_key] += 1 # Force key change to collapse
                                     st.rerun() # Partial rerun
 
@@ -604,6 +636,7 @@ def render_agile_management(engine, prioritized_tasks_tbl, all_task_options):
                                 prioritized_tasks_tbl.delete()
                                 .where(prioritized_tasks_tbl.c.id == row['id'])
                             )
+                        get_tasks_df(engine, prioritized_tasks_tbl, force_refresh=True)
                         st.success("Task deleted!")
                         st.rerun()
 
@@ -683,6 +716,7 @@ def render_agile_management(engine, prioritized_tasks_tbl, all_task_options):
                     updates.append(tid)
 
         if updates or deleted_ids:
+            get_tasks_df(engine, prioritized_tasks_tbl, force_refresh=True)
             if updates:
                 st.success(f"Updated {len(updates)} tasks.")
             st.rerun()
@@ -691,9 +725,8 @@ def page_manage_prioritized(engine, prioritized_tasks_tbl, archived_tasks_tbl):
     st.header("⚙️ Agile Task Management")
     
     # Pre-fetch all tasks for dependency dropdowns
-    with engine.begin() as conn:
-        all_tasks = pd.read_sql(select(prioritized_tasks_tbl.c.id, prioritized_tasks_tbl.c.title), conn)
-        all_task_options = all_tasks.to_dict(orient='records')
+    df = get_tasks_df(engine, prioritized_tasks_tbl)
+    all_task_options = df[['id', 'title']].to_dict(orient='records')
 
     # --- 1. Add New Task Form
     with st.expander("➕ Add New Prioritized Task", expanded=False):
@@ -738,6 +771,7 @@ def page_manage_prioritized(engine, prioritized_tasks_tbl, archived_tasks_tbl):
                     }
                     with engine.begin() as conn:
                         conn.execute(insert(prioritized_tasks_tbl).values(**new_task))
+                    get_tasks_df(engine, prioritized_tasks_tbl, force_refresh=True)
                     st.success("Task added!")
                     st.rerun()
 
@@ -756,6 +790,7 @@ def page_settings(engine, prioritized_tasks_tbl, archived_tasks_tbl):
     if st.button("Delete ALL prioritized tasks", type="primary"):
         with engine.begin() as conn:
             conn.exec_driver_sql("DELETE FROM prioritized_tasks")
+        get_tasks_df(engine, prioritized_tasks_tbl, force_refresh=True)
         st.warning("All prioritized tasks deleted")
 
     st.subheader("🧹 Maintenance")
@@ -779,6 +814,7 @@ def page_settings(engine, prioritized_tasks_tbl, archived_tasks_tbl):
             """)
             conn.execute(delete_query, {"cutoff": cutoff})
             
+        get_tasks_df(engine, prioritized_tasks_tbl, force_refresh=True)
         st.success(f"Archived tasks successfully.")
 
 
@@ -794,6 +830,16 @@ def main():
         st.stop()
 
     engine, prioritized_tasks_tbl, archived_tasks_tbl = get_engine_and_table()
+
+    # Pre-fetch all tasks into session state caching
+    get_tasks_df(engine, prioritized_tasks_tbl)
+
+    with st.sidebar:
+        st.divider()
+        if st.button("🔄 Force DB Reload", help="Reload all tasks directly from the database"):
+            get_tasks_df(engine, prioritized_tasks_tbl, force_refresh=True)
+            st.success("Refreshed!")
+            st.rerun()
 
     # Sub-tabs for the main Daily Prioritization feature
     subtabs = st.tabs(["Dashboard", "Timeline", "Manage Tasks", "Import Tasks", "Settings"])
